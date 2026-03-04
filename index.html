@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw - Architecture Evolution</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #06080c;
+    --bg-surface: #0e1118;
+    --bg-elevated: #161a24;
+    --bg-card: #1c2030;
+    --bg-band: #0b0e16;
+    --border: #232838;
+    --border-focus: #3a4260;
+    --text-primary: #f0f3fa;
+    --text-secondary: #c8cee0;
+    --text-tertiary: #9aa2b8;
+    --accent-green: #4eca68;
+    --accent-blue: #5b9cf5;
+    --accent-amber: #e8a44c;
+    --accent-cyan: #4cc9f0;
+    --font-display: "DM Sans", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  #header {
+    padding: 12px 24px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  #header-left { display: flex; align-items: center; gap: 14px; }
+  #header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  #module-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  #graph-container { flex: 1; position: relative; overflow: hidden; }
+  #graph-container svg { display: block; width: 100%; height: 100%; cursor: grab; }
+  #graph-container svg:active { cursor: grabbing; }
+
+  .band-rect { rx: 10; ry: 10; }
+  .band-label {
+    font-family: var(--font-mono);
+    font-size: 36px;
+    font-weight: 600;
+    fill: #d0d6e8;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .band-desc {
+    font-family: var(--font-display);
+    font-size: 27px;
+    font-weight: 400;
+    fill: #b8c0d8;
+    letter-spacing: 0;
+  }
+  .node-body { stroke-width: 1.5; cursor: pointer; }
+  .node-glow { pointer-events: none; }
+  .node-label {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    fill: #ffffff;
+    text-anchor: middle;
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: var(--bg-deep);
+    stroke-width: 6px;
+    stroke-linejoin: round;
+  }
+  .node-sublabel {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 500;
+    fill: #eef0f8;
+    text-anchor: middle;
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: var(--bg-deep);
+    stroke-width: 5px;
+    stroke-linejoin: round;
+  }
+  .edge-path { fill: none; pointer-events: none; }
+
+  #tooltip {
+    display: none;
+    position: fixed;
+    pointer-events: none;
+    background: rgba(14, 17, 24, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-focus);
+    color: var(--text-primary);
+    padding: 14px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.55;
+    max-width: 340px;
+    z-index: 200;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+  }
+  .tt-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .tt-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .tt-title { font-weight: 600; font-size: 14px; }
+  .tt-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 500; padding: 1px 7px; border-radius: 8px; margin-left: auto; }
+  .tt-badge-new { background: rgba(78,202,104,0.15); color: var(--accent-green); }
+  .tt-badge-modified { background: rgba(91,156,245,0.15); color: var(--accent-blue); }
+  .tt-badge-unchanged { background: rgba(82,92,116,0.15); color: var(--text-tertiary); }
+  .tt-path { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-bottom: 10px; }
+  .tt-desc { font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px; }
+  .tt-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .tt-grid { display: grid; grid-template-columns: 1fr auto; gap: 3px 16px; }
+  .tt-label { color: var(--text-secondary); font-size: 11.5px; }
+  .tt-value { color: var(--text-primary); font-weight: 500; font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
+  .tt-section { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin-top: 6px; margin-bottom: 4px; }
+  .tt-edge-item { display: flex; justify-content: space-between; font-size: 11px; }
+  .tt-edge-name { color: var(--text-secondary); }
+  .tt-edge-weight { font-family: var(--font-mono); font-weight: 500; }
+  .tt-edge-out { color: var(--accent-amber); }
+  .tt-edge-in { color: var(--accent-cyan); }
+
+  #top-panel {
+    display: flex;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    height: 170px;
+  }
+  #narrative-panel {
+    flex: 2;
+    padding: 14px 22px;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #narrative-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+  #narrative-desc { font-size: 13.5px; line-height: 1.6; color: var(--text-primary); }
+  #narrative-evolution { font-size: 13.5px; line-height: 1.6; color: var(--text-primary); }
+  #narrative-evolution em, #narrative-desc em { font-style: italic; color: var(--accent-cyan); }
+  .stats-commit { font-size: 13px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stats-row { display: flex; justify-content: space-between; font-size: 11.5px; }
+  .stats-label { color: var(--text-tertiary); }
+  .stats-value { font-family: var(--font-mono); font-weight: 500; color: var(--text-secondary); }
+  .stats-growth { display: flex; align-items: flex-end; gap: 3px; margin-top: auto; height: 20px; }
+  .stats-bar { flex: 1; background: var(--border); border-radius: 2px; min-height: 2px; transition: background 0.3s ease; }
+  .stats-bar.active { background: var(--accent-blue); }
+
+  #timeline-panel { flex: 1; min-width: 300px; padding: 14px 24px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+  #snapshot-info { text-align: center; }
+  #snapshot-date { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  #snapshot-label { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+  #slider-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .nav-btn {
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-secondary);
+    width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .nav-btn:hover { background: var(--bg-card); border-color: var(--border-focus); color: var(--text-primary); }
+  #toggle-arrows {
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-tertiary);
+    font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+    padding: 4px 10px; border-radius: 8px; cursor: pointer;
+    transition: all 0.15s ease; letter-spacing: 0.02em; white-space: nowrap;
+  }
+  #toggle-arrows:hover { background: var(--bg-card); border-color: var(--border-focus); color: var(--text-secondary); }
+  #toggle-arrows.active { background: rgba(232,164,76,0.12); border-color: rgba(232,164,76,0.35); color: var(--accent-amber); }
+  #slider { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; background: var(--border); border-radius: 2px; outline: none; }
+  #slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent-blue); border-radius: 50%; cursor: pointer; border: 2px solid var(--bg-surface); box-shadow: 0 0 8px rgba(91,156,245,0.3); }
+  #tick-labels { display: flex; justify-content: space-between; padding: 0 40px; }
+  #tick-labels span { font-family: var(--font-mono); font-size: 8px; color: var(--text-tertiary); }
+  #tick-labels span.tick-hidden { visibility: hidden; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="header-left">
+    <h1>OpenClaw Architecture Evolution</h1>
+    <span id="module-count">-</span>
+  </div>
+  <button id="toggle-arrows">Show dependencies</button>
+</div>
+
+<div id="top-panel">
+  <div id="timeline-panel">
+    <div id="snapshot-info">
+      <div id="snapshot-date">Loading...</div>
+      <div id="snapshot-label"></div>
+    </div>
+    <div id="slider-row">
+      <button class="nav-btn" id="prev-btn">&#8249;</button>
+      <input type="range" id="slider" min="0" max="16" value="0" step="1">
+      <button class="nav-btn" id="next-btn">&#8250;</button>
+    </div>
+    <div id="tick-labels"></div>
+  </div>
+  <div id="narrative-panel">
+    <div id="narrative-title">-</div>
+    <div id="narrative-evolution"></div>
+    <div id="narrative-desc">-</div>
+  </div>
+</div>
+
+<div id="graph-container"></div>
+<div id="tooltip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+(function() {
+
+const GROUP_ORDER = ["CHANNELS", "EXTENSIONS", "CORE", "AI", "INFRA", "PLATFORM"];
+const GROUP_LABELS = { CHANNELS: "Channels", EXTENSIONS: "Extensions", CORE: "Core", AI: "AI & Media", INFRA: "Infrastructure", PLATFORM: "Platform" };
+const GROUP_DESCS = {
+  CHANNELS: "Built-in messaging adapters - Telegram, Discord, Slack, Signal, iMessage, WhatsApp",
+  EXTENSIONS: "Plugin ecosystem - additional channels, memory, diagnostics, integrations",
+  CORE: "Runtime logic - agent orchestration, gateway, routing, sessions, auto-reply",
+  AI: "Intelligence layer - media understanding, LLM providers, memory, text-to-speech",
+  INFRA: "Shared plumbing - CLI, commands, logging, process management, plugin SDK",
+  PLATFORM: "Platform-specific - browser automation, terminal UI, macOS app, onboarding",
+};
+const GROUP_MEMBERS = {
+  CHANNELS: ["src/channels","src/discord","src/imessage","src/line","src/routing","src/signal","src/slack","src/telegram","src/web","src/webchat","src/whatsapp"],
+  EXTENSIONS: ["extensions/acpx","extensions/bluebubbles","extensions/copilot-proxy","extensions/device-pair","extensions/diagnostics-otel","extensions/diffs","extensions/discord","extensions/feishu","extensions/googlechat","extensions/google-gemini-cli-auth","extensions/imessage","extensions/irc","extensions/line","extensions/llm-task","extensions/lobster","extensions/matrix","extensions/mattermost","extensions/memory-core","extensions/memory-lancedb","extensions/minimax-portal-auth","extensions/msteams","extensions/nextcloud-talk","extensions/nostr","extensions/open-prose","extensions/phone-control","extensions/qwen-portal-auth","extensions/shared","extensions/signal","extensions/slack","extensions/synology-chat","extensions/talk-voice","extensions/telegram","extensions/test-utils","extensions/thread-ownership","extensions/tlon","extensions/twitch","extensions/voice-call","extensions/whatsapp","extensions/zalo","extensions/zalouser"],
+  CORE: ["src/acp","src/agents","src/auto-reply","src/config","src/cron","src/gateway","src/hooks","src/pairing","src/secrets","src/security","src/sessions"],
+  AI: ["src/link-understanding","src/markdown","src/media","src/media-understanding","src/memory","src/providers","src/tts"],
+  INFRA: ["src/_root","src/cli","src/commands","src/compat","src/docs","src/infra","src/logging","src/plugin-sdk","src/plugins","src/process","src/scripts","src/shared","src/terminal","src/test-helpers","src/test-utils","src/types","src/utils"],
+  PLATFORM: ["src/browser","src/canvas-host","src/daemon","src/macos","src/node-host","src/tui","src/wizard"],
+};
+
+const MODULE_PALETTE = [
+  "#7b93db","#4eca68","#e8a44c","#c77dff","#f0736e",
+  "#45c8c8","#f5a623","#5b9cf5","#e06eaa","#8bc563",
+  "#d4a05a","#6cb4ee","#b87ee0","#5ed5a8","#e0825c",
+  "#8a90a2","#c9c26e","#6e9fd4","#d48db6","#7ecfc0",
+  "#bba36e","#8ea2c8","#c4977a","#6ec4a0","#a87ec4",
+  "#c4c47a","#7ab0a8","#e07070","#70b8e0","#a0d468",
+  "#d490c0","#68c8a0","#c8a050","#9080d0","#e09858",
+  "#58b0b8","#c86888","#78c070","#b0a078","#6898d0",
+  "#d07898","#88c8a8","#c0b060","#7888c0","#d08870",
+  "#60c0c0","#b870b8","#90c858","#c88888","#5898c8",
+  "#a8c078","#d0a088","#6888b0","#b8a8c0","#80c0a0",
+  "#c0c888","#8098b8","#d0b878","#68a8c8","#c098a0",
+  "#98c8b0","#b8b090","#7090c0","#c8a898","#78c0b8",
+  "#b0b878","#8888c0","#c8b880","#60a0b8","#c088a0",
+  "#88c0a0","#b8c070","#8080b8","#c0a870","#68b0c0",
+  "#b898b0","#90c080","#a8a888","#7898c0","#c8a088",
+  "#70b8b0","#a8b878","#9088b8","#c0b070","#5898b8",
+  "#b888a0","#80c090","#b0a880","#7888b8","#c8b088",
+  "#68b8a8","#a0c070","#8890b8","#c0a878","#6098c0",
+  "#b898a8"
+];
+
+
+const MODULE_DESCS = {
+  "src/channels": "This is where all the channel metadata lives. Which channels are active, who's allowed to send messages, which commands are gated per channel. Think of it as the registry that every messaging adapter checks in with.",
+  "src/discord": "Talks to Discord's bot API. Handles the Discord-specific stuff like chunking long messages, managing guilds, slash commands. If you send a message on Discord, it goes through here.",
+  "src/imessage": "Bridges into Apple's iMessage. Only works on macOS because it needs local access to the Messages framework. Lets the AI agent read and reply to iMessages.",
+  "src/line": "Connects to LINE's bot platform. Handles webhooks, sends rich Flex Messages (LINE's card-like UI), downloads media. Popular in Asia.",
+  "src/routing": "When a message comes in, this module figures out which agent should handle it. Looks at the channel, who sent it, account bindings, session keys. Without this, messages would have nowhere to go.",
+  "src/signal": "Talks to Signal's daemon process for encrypted messaging. Handles identity verification and message formatting. Signal is tricky because it's end-to-end encrypted, so you need a local daemon running.",
+  "src/slack": "Integrates with Slack's Web API and Events API. Renders messages using Block Kit (Slack's UI framework), handles threaded replies, interactive button actions.",
+  "src/telegram": "Wraps Telegram's Bot API. Supports both polling and webhooks, inline keyboards, media uploads/downloads, group chat. One of the first channels added after WhatsApp.",
+  "src/web": "The original WhatsApp Web adapter. Manages the browser-based WhatsApp Web connection, QR code login, monitors incoming messages. This is where the project started.",
+  "src/webchat": "A browser-based chat UI that talks directly to the gateway. No third-party messaging platform needed. You just open a webpage and chat with the agent.",
+  "src/whatsapp": "Shared WhatsApp utilities. Phone number normalization, JID format handling. Both the WhatsApp adapter and related extensions use this.",
+  "extensions/acpx": "Runs agent tool calls through an external acpx CLI process in a sandbox. Keeps untrusted code execution isolated from the main process.",
+  "extensions/bluebubbles": "If you don't have a Mac but still want iMessage, this connects to a BlueBubbles server running on a Mac somewhere. Workaround for Apple's ecosystem lock-in.",
+  "extensions/copilot-proxy": "Routes LLM requests through a local GitHub Copilot proxy. Useful if you have Copilot access and want to use those models through OpenClaw.",
+  "extensions/device-pair": "Generates QR codes and setup URLs so you can connect a phone or remote device to the gateway. Basically the onboarding flow for new devices.",
+  "extensions/diagnostics-otel": "Ships gateway telemetry data to an OpenTelemetry-compatible backend. If you need observability into what the gateway is doing, this is how.",
+  "extensions/diffs": "Renders code diffs as PNG images. When an agent makes code changes, this lets it show a visual diff instead of raw text.",
+  "extensions/discord": "Thin plugin wrapper that registers the Discord adapter (from src/discord) with the plugin system. The actual Discord logic lives in src/discord.",
+  "extensions/feishu": "Adapter for Feishu (also known as Lark outside China). Community-maintained. Supports multi-account setups.",
+  "extensions/googlechat": "Connects to Google Chat's bot API. Webhook-based messaging for Google Workspace environments.",
+  "extensions/google-gemini-cli-auth": "OAuth device-code flow for Google Gemini. You run it, get a code, authorize in browser, and it stores the credentials.",
+  "extensions/imessage": "Plugin wrapper that registers the iMessage adapter with the plugin system. Actual iMessage logic lives in src/imessage.",
+  "extensions/irc": "Old-school IRC adapter. Connects to IRC servers as a messaging channel. For the people who still use IRC (respect).",
+  "extensions/line": "Plugin wrapper that registers the LINE adapter. The actual LINE integration code lives in src/line.",
+  "extensions/llm-task": "Runs small, focused LLM subtasks that return structured JSON. When the main agent needs to extract specific data, it delegates to this.",
+  "extensions/lobster": "Typed workflow pipelines with human-in-the-loop approval steps. Think of it like a state machine where some transitions need a human to say 'yes, proceed'.",
+  "extensions/matrix": "Adapter for the Matrix protocol. Supports end-to-end encryption, which is non-trivial to implement. Decentralized messaging, so you run your own server.",
+  "extensions/mattermost": "Connects to Mattermost's team messaging API. Open-source Slack alternative, popular in enterprise.",
+  "extensions/memory-core": "Basic file-backed memory. Gives the agent memory_search and memory_get tools so it can recall past conversations. Simple but works.",
+  "extensions/memory-lancedb": "Vector-search based long-term memory using LanceDB. Auto-captures conversation context into embeddings, auto-recalls relevant memories. The smarter memory option.",
+  "extensions/minimax-portal-auth": "OAuth device-code flow for the MiniMax AI provider. Same pattern as the Gemini auth plugin.",
+  "extensions/msteams": "Adapter for Microsoft Teams using the Bot Framework. If your org uses Teams, this is how the agent talks there.",
+  "extensions/nextcloud-talk": "Connects to Nextcloud Talk, the self-hosted chat that comes with Nextcloud. For people who run their own infrastructure.",
+  "extensions/nostr": "Adapter for the Nostr protocol. Uses NIP-04 encrypted DMs. Decentralized social protocol, still niche but growing.",
+  "extensions/open-prose": "VM-based skill pack for prose editing. Gives the agent slash commands for rewriting, expanding, summarizing text.",
+  "extensions/phone-control": "Lets the agent request temporary access to device features like camera, screen, calendar. Time-limited so it expires automatically.",
+  "extensions/qwen-portal-auth": "OAuth device-code flow for the Qwen model provider. Same auth pattern as Gemini and MiniMax plugins.",
+  "extensions/shared": "Common test utilities that multiple extensions reuse. Not user-facing, just reduces code duplication in extension tests.",
+  "extensions/signal": "Plugin wrapper that registers the Signal adapter. Actual Signal logic lives in src/signal.",
+  "extensions/slack": "Plugin wrapper that registers the Slack adapter. Actual Slack logic lives in src/slack.",
+  "extensions/synology-chat": "Connects to Synology Chat, the messaging built into Synology NAS devices. Very niche but someone needed it.",
+  "extensions/talk-voice": "Configures ElevenLabs voice settings. Lets you pick which voice the agent uses for text-to-speech output.",
+  "extensions/telegram": "Plugin wrapper that registers the Telegram adapter. Actual Telegram logic lives in src/telegram.",
+  "extensions/test-utils": "Shared test helpers for extension integration tests. Sets up runtime environments, mocks what needs mocking.",
+  "extensions/thread-ownership": "In group chats, figures out which agent owns which thread based on @-mentions. Without this, all agents would try to respond to everything.",
+  "extensions/tlon": "Adapter for Tlon, the messaging layer on the Urbit network. Very niche decentralized platform.",
+  "extensions/twitch": "Connects to Twitch chat via IRC. If you want an AI agent in your Twitch stream chat.",
+  "extensions/voice-call": "Real phone calls via Twilio. Handles inbound/outbound calls with real-time speech-to-text and text-to-speech. The agent can literally pick up the phone.",
+  "extensions/whatsapp": "Plugin wrapper that registers the WhatsApp Web adapter. Actual WhatsApp logic lives in src/web.",
+  "extensions/zalo": "Adapter for Zalo Official Accounts. Zalo is the dominant messaging app in Vietnam.",
+  "extensions/zalouser": "Connects to personal Zalo accounts (not business accounts) through zca-cli. Different API from Official Accounts.",
+  "src/acp": "Agent Client Protocol. Lets external ACP-compatible agents connect to the gateway via stdio. Think of it as the bridge between OpenClaw and outside agent runtimes.",
+  "src/agents": "The brain of the whole system. Picks the right model, executes tools, manages conversation state, handles sandboxing. Every AI turn goes through here.",
+  "src/auto-reply": "When a message comes in, this is what decides to call the LLM. Also handles slash commands, message templating, chunking long replies. The dispatcher between 'message received' and 'AI responds'.",
+  "src/config": "Loads and validates the YAML configuration. Merges per-channel settings, agent definitions, session rules. If something is misconfigured, this is where it gets caught.",
+  "src/cron": "Runs scheduled tasks. You can set up cron jobs that trigger agent turns on a timer and deliver results to a channel. Think scheduled reports or periodic checks.",
+  "src/gateway": "The central hub. Everything connects here via WebSockets. Authenticates clients, manages sessions, routes messages between channels and agents. If this goes down, everything goes down.",
+  "src/hooks": "Lifecycle hooks that run on events like boot, before a prompt, or when memory updates. Both built-in hooks and user-defined ones. Lets you customize behavior without touching core code.",
+  "src/pairing": "Generates one-time pairing codes so new devices can join the gateway securely. You get a code, enter it on the new device, done.",
+  "src/secrets": "Resolves secret references at runtime. Secrets can come from files, env vars, or an exec provider. Caches them, audits access. Keeps credentials out of config files.",
+  "src/security": "Scans the system for security issues. Checks config, file permissions, tool policies, sandbox settings. Basically a built-in security audit that tells you what to fix.",
+  "src/sessions": "Per-session overrides. Different sessions can use different models, different send policies, different thinking levels. This is where that per-session customization lives.",
+  "src/link-understanding": "When someone shares a URL in a message, this fetches the page content and summarizes it so the agent knows what the link is about. Without this, the agent is blind to shared links.",
+  "src/markdown": "Converts Markdown to platform-specific formats. Slack uses Block Kit, WhatsApp has its own formatting, Telegram uses HTML. Same message, different rendering per platform.",
+  "src/media": "Handles files. Image resizing, audio format conversion, MIME detection, hosting files over a local HTTP server. If it's not text, it goes through here.",
+  "src/media-understanding": "Sends images, audio, video through AI vision/transcription models. This is how the agent 'sees' an image or 'hears' a voice note someone sent.",
+  "src/memory": "Long-term conversation memory with vector search. Embeds conversations, stores them, retrieves relevant memories when needed. Supports multiple embedding providers.",
+  "src/providers": "Shared logic for LLM providers. Auth flows, model catalogs for GitHub Copilot, Google, Qwen, etc. When you add a new AI provider, this is where the shared wiring lives.",
+  "src/tts": "Text-to-speech. Turns agent text replies into audio using ElevenLabs, Edge TTS, or other engines. The agent can literally speak its responses.",
+  "src/_root": "Top-level entry points. Runtime bootstrap, logger setup, globals, version info. The stuff that runs first when the process starts.",
+  "src/cli": "The CLI framework. Parses command-line args, wires up all the subcommands, provides UI helpers like progress bars and prompts. The entry point when you run 'openclaw' in a terminal.",
+  "src/commands": "Every 'openclaw' subcommand lives here. 'openclaw agent', 'openclaw gateway', 'openclaw config', 'openclaw send', etc. Each one is a separate command handler.",
+  "src/compat": "Handles migration from older versions. Maps old project names and config keys to new ones so upgrades don't break existing setups.",
+  "src/docs": "Tests that make sure documentation stays in sync with code. If you add a new command but forget to document it, these tests catch it.",
+  "src/infra": "Low-level building blocks. Networking utils, file locks, device identity, port finding, archive handling, Tailscale integration, dotenv loading. The plumbing that everything else builds on.",
+  "src/logging": "Multi-transport logging with file rotation and subsystem tagging. You can filter logs by module, set different log levels, write to files or console.",
+  "src/plugin-sdk": "The public API that extensions import. If you're writing a plugin, you import from here to register your channel, tool, or provider. This is the contract between core and plugins.",
+  "src/plugins": "Discovers, loads, validates, and sandboxes plugins. Handles both bundled plugins and user-installed npm packages. The plugin lifecycle manager.",
+  "src/process": "Spawns and manages child processes. PTY support for interactive shells, timeout enforcement so nothing runs forever, output streaming. Used when agents execute shell commands.",
+  "src/scripts": "Build-time helper scripts. Bundling assets like the canvas A2UI, release preparation. Not runtime code.",
+  "src/shared": "Common data structures that multiple modules need. Chat message envelopes, config evaluation helpers, avatar policies, network utilities. The shared vocabulary of the codebase.",
+  "src/terminal": "Terminal output formatting. ANSI-aware tables, styled prompts, color palette, hyperlinks. Makes CLI output look good in different terminal emulators.",
+  "src/test-helpers": "Lightweight test setup utilities. Creates mock workspaces, sets up environment state. Shared across unit test files.",
+  "src/test-utils": "Richer test infrastructure. Mock channels, fetch mocks, fixture suites, model auth stubs. The heavier testing toolkit.",
+  "src/types": "TypeScript declaration files for dependencies that don't have their own types. node-pty, canvas, qrcode, etc.",
+  "src/utils": "Small utility functions. Phone number normalization, fetch with timeouts, API key masking, delivery context helpers. The junk drawer, but a useful one.",
+  "src/browser": "Launches Chrome via CDP (Chrome DevTools Protocol) and controls it. Web browsing, page evaluation, screenshot capture. The agent can browse the internet through this.",
+  "src/canvas-host": "Serves interactive HTML/JS canvases over HTTP with WebSocket live-reload. When the agent generates a UI artifact, this is what hosts and displays it.",
+  "src/daemon": "Installs the gateway as a system service. Uses launchd on macOS, systemd on Linux, Task Scheduler on Windows. So the gateway starts on boot without manual intervention.",
+  "src/macos": "macOS-specific helpers. Integrates with the native menubar app, handles system-level gateway control. Only relevant if you're running on a Mac.",
+  "src/node-host": "Connects a remote machine to the gateway for delegated tool execution. If you want the agent to run commands on a different server, this is the bridge.",
+  "src/tui": "Terminal-based chat interface. Connects to the gateway over WebSocket, lets you chat with the agent right from your terminal. No browser needed.",
+  "src/wizard": "The first-run setup flow. Walks new users through gateway configuration, channel setup, security acknowledgement. Interactive prompts that get you from zero to working.",
+};
+
+const SNAPSHOT_NARRATIVES = [
+  {
+    title: "The Seed",
+    description: "One file does everything. It connects to WhatsApp, waits for someone to send a message, passes that message to an AI model, and sends the AI's response back. <em>There's no architecture here yet.</em> It's just a script that does one thing.",
+    evolution: null,
+  },
+  {
+    title: "Layered Foundation",
+    description: "The single file got split into 14 modules - config, AI providers, media, CLI, etc. A macOS app was built on top, and <em>that forced a big decision:</em> the app needs to talk to the backend, so they built a gateway server and connected them with WebSockets.",
+    evolution: "This is where it went from 'one script' to actual software. The gateway sits in the middle - Mac app, web UI, terminal all connect through it. <em>Everything goes through the gateway.</em> Telegram was added as the second platform after WhatsApp, proving the system handles multiple channels.",
+  },
+  {
+    title: "Gateway & Channels",
+    description: "Adding Telegram was <em>the real test.</em> If you can plug in a second messaging platform without rewriting the whole thing, your design is right. That worked. The gateway is now the single front door - every client connects there, and it figures out where to send messages.",
+    evolution: "The agent can now browse the web too (browser automation module). The system went from being a WhatsApp-only chatbot to something that <em>works across multiple messaging platforms.</em> Each platform has its own adapter that translates between that platform's API and the internal message format.",
+  },
+  {
+    title: "Channel Explosion",
+    description: "Four messaging platforms were added in two weeks: Slack, Discord, Signal, iMessage. But just having channels isn't enough to build something real - you also need <em>the ability to remember things between conversations</em> (sessions), react to events (hooks), run tasks on a schedule (cron), and let users set things up easily (wizard). That's what happened here.",
+    evolution: "The shape of the system is now like a wheel. <em>The gateway sits in the center, and each channel is a spoke.</em> Messages flow in from any platform, get routed to the right AI agent, and responses flow back out. A terminal UI was added so you can chat with the agent directly from the command line too.",
+  },
+  {
+    title: "Platform Maturity",
+    description: "At this point they stopped adding new messaging platforms and started <em>making the existing ones solid.</em> A 'doctor' command was added that checks your setup for problems. The AI agent's ability to run code was put inside a sandbox so it can't accidentally damage your system. Native mobile apps for iOS and Android showed up.",
+    evolution: "This is the phase every growing project goes through - <em>you pause feature work and fix the foundation.</em> If you're going to let an AI run shell commands on someone's laptop, you need proper safety controls. That's what sandboxing and elevated permissions are about.",
+  },
+  {
+    title: "Plugin Architecture",
+    description: "This is the biggest design change in the project's history. Before this, if you wanted to add a new messaging platform, you had to edit the main code. <em>After this, you just write a plugin.</em> The plugin system lets outside code register new channels, AI providers, or tools without touching anything in core.",
+    evolution: "Why do this? Because <em>more people wanted to contribute than the core team could review.</em> A plugin boundary means contributors can extend the system without risk of breaking existing functionality. It's a well-known pattern - once your project gets big enough, you need a formal way for others to plug into it.",
+  },
+  {
+    title: "Ecosystem Growth",
+    description: "People started building plugins instead of sending code changes to the main project. MS Teams, Matrix (with encrypted messaging, which is really hard to implement), phone calls through Twilio, Google Chat - <em>all built as plugins by different contributors.</em>",
+    evolution: "The core team focuses on keeping the plugin system healthy, while plugin authors handle the messy details of each platform's API. The browser automation got better too - it can now relay through a Chrome extension. <em>The plugin system proved it can handle real-world complexity</em>, not just simple cases.",
+  },
+  {
+    title: "Extension Boom",
+    description: "<em>Plugins were shipping faster than changes to the core.</em> That's a good sign - it means the plugin system is doing its job. The core team used this time to add monitoring tools (so you can see what the gateway is doing) and improve the UI for picking between different chat sessions.",
+    evolution: "The module count nearly doubled, going from 43 to 66. New platforms like Line, Tlon (a niche decentralized network), and Nostr all arrived as plugins. The system naturally split into <em>two layers moving at different speeds</em> - the core changes slowly and carefully, while the plugin ecosystem moves fast.",
+  },
+  {
+    title: "Scale & Community",
+    description: "Once outside contributors are submitting plugins, <em>you need to start checking their code for security issues.</em> That's exactly what happened here. They also found that someone could bypass the gateway's login check using a reverse proxy, so that got fixed too.",
+    evolution: "77 modules now. Most new code is coming from community contributors. Feishu (a Chinese workplace app), Nextcloud Talk (self-hosted chat), and xAI's Grok model were all added by different people. <em>The project is no longer just one team's work</em> - it's an ecosystem.",
+  },
+  {
+    title: "The Great Refactor",
+    description: "<em>This was an intentional slowdown.</em> When you build fast, you end up with the same logic copy-pasted in multiple places. At some point you have to stop and clean it up. They pulled all the duplicated code into shared modules, and the codebase actually got much smaller as a result.",
+    evolution: "Over 25 cleanup commits consolidated scattered logic. Things like how config files are read, how channels are set up, how tools are managed - all of that was happening slightly differently in each module. <em>Now it happens in one place.</em> Security improvements were added too, like protection against cross-site request forgery.",
+  },
+  {
+    title: "Test Consolidation",
+    description: "The automated tests weren't keeping up with how fast the code was growing. Dozens of test files that each set up their own environment got merged into organized test suites with <em>shared setup code.</em> When you have 80+ modules, you can't have each one reinventing how to set up a test from scratch.",
+    evolution: "This is less glamorous than adding features, but it matters. <em>If your tests are messy, you can't confidently change code</em> because you don't know what might break. Cleaning up the tests made the whole codebase safer to work on.",
+  },
+  {
+    title: "Type Safety Push",
+    description: "TypeScript has a strict mode that catches bugs at compile time - things like passing the wrong type of data to a function. <em>They turned it on and fixed everything that broke.</em> 18 rounds of fixes, going module by module through the entire codebase.",
+    evolution: "They also split how plugins interact with AI calls into two separate steps: one for picking the model, one for building the prompt. <em>This gave plugin authors more control</em> over what happens when the AI is about to respond. The gateway also got limits on how much conversation history it sends to the AI to avoid running out of context space.",
+  },
+  {
+    title: "Security Hardening",
+    description: "A thorough security review. They went through every place where the system talks to the outside world and added checks. <em>Can someone inject a malicious command? Can someone trick the system into reading files it shouldn't?</em> Can someone bypass login on a webhook? Each of these was found and fixed.",
+    evolution: "Instead of each module handling its own security, <em>they centralized it.</em> One place that defines the security rules, and every module follows those rules. Old SHA-1 identifiers (which are considered weak) were replaced with SHA-256. Sandbox escapes through symbolic links were patched.",
+  },
+  {
+    title: "Stabilization",
+    description: "The scheduled task system (cron) was the biggest source of problems. Tasks would get stuck, timers wouldn't restart after firing, sessions would accidentally share IDs. <em>Six fixes in a row</em> - they went through every way it could fail and fixed each one.",
+    evolution: "The install process for plugins and hooks was also cleaned up - it was doing the same thing in two different ways, so they merged it into one. <em>This is the first time the project entered 'maintenance mode'</em> - fewer new features, more focus on making existing ones actually reliable.",
+  },
+  {
+    title: "Boundary Hardening",
+    description: "Different modules were handling the same things in slightly different ways - how session IDs are formatted, how file paths are resolved, who's allowed to send messages. <em>These inconsistencies caused subtle bugs</em> that were hard to track down.",
+    evolution: "They unified all of it. One shared module that normalizes session keys. One shared module that resolves paths. One shared module that checks permissions. <em>The internal boundaries between modules are now as carefully guarded as the external ones</em> (like the gateway's public API).",
+  },
+  {
+    title: "Operational Polish",
+    description: "These are the kind of bugs you only find after real people use the system in production. The AI model auto-detection was ignoring settings people explicitly configured. The memory search would fail silently instead of falling back to a simpler method. <em>Small bugs, but they ruin the experience.</em>",
+    evolution: "Every fix here came from someone actually hitting the problem. Login credentials getting quietly lost when renamed. The admin UI missing the ability to delete old sessions. <em>This is the 'last mile' work</em> - the architecture is solid, now it's about getting the details right.",
+  },
+  {
+    title: "The Living System",
+    description: "Recent changes are small refinements, not structural redesigns. <em>When your commits are tweaks instead of rewrites, the architecture has found its shape.</em> This is what a mature system looks like - it works, and changes build on what's there instead of replacing it.",
+    evolution: "91 modules, 850k+ lines of code. At the center is the gateway - everything connects through it. Around it is the core logic: AI agents, message routing, configuration, sessions. On the outside is the plugin ecosystem with 17+ messaging platforms. <em>The gateway runs the show, plugins extend it without touching the core.</em>",
+  },
+];
+
+const BAND_COLORS = {
+  CHANNELS: "#151d2e",
+  EXTENSIONS: "#121828",
+  CORE: "#161a24",
+  AI: "#14182a",
+  INFRA: "#111520",
+  PLATFORM: "#151c28",
+};
+
+let appData, currentIndex = 0;
+let svg, zoomGroup, bandsLayer, edgesLayer, nodesLayer;
+let moduleColorMap = new Map();
+let locScale;
+let layoutCache = new Map();
+let width, height;
+let arrowsHidden = true;
+
+function moduleGroup(id) {
+  for (const [g, members] of Object.entries(GROUP_MEMBERS)) {
+    if (members.includes(id)) return g;
+  }
+  return "INFRA";
+}
+
+function buildColorMap(snapshots) {
+  const allIds = new Set();
+  for (const s of snapshots) for (const m of s.modules) allIds.add(m.id);
+  [...allIds].sort().forEach((id, i) => moduleColorMap.set(id, MODULE_PALETTE[i % MODULE_PALETTE.length]));
+}
+
+function buildLocScale(snapshots) {
+  let minL = Infinity, maxL = 0;
+  for (const s of snapshots) for (const m of s.modules) { minL = Math.min(minL, m.loc); maxL = Math.max(maxL, m.loc); }
+  locScale = d3.scaleSqrt().domain([minL, maxL]).range([30, 90]).clamp(true);
+}
+
+function nodeRadius(loc) { return locScale(loc); }
+function shortName(id) { return id.split("/").pop(); }
+function formatNum(n) { return n >= 1000 ? (n/1000).toFixed(1)+"k" : String(n); }
+function formatDate(s) { return new Date(s+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); }
+
+function computeLayout(snapshot) {
+  const pad = 24;
+  const bandGap = 10;
+  const labelArea = 85;
+  const bandW = width - pad * 2;
+  const innerPad = 50;
+
+  const activeGroups = GROUP_ORDER.filter(g =>
+    snapshot.modules.some(m => moduleGroup(m.id) === g)
+  );
+
+  const groupModules = new Map();
+  for (const g of activeGroups) {
+    groupModules.set(g, snapshot.modules
+      .filter(m => moduleGroup(m.id) === g)
+      .sort((a, b) => b.loc - a.loc));
+  }
+
+  const maxPerRow = Math.floor((bandW - innerPad * 2) / 140);
+
+  const groupWeights = new Map();
+  for (const g of activeGroups) {
+    const count = groupModules.get(g).length;
+    const rows = Math.ceil(count / maxPerRow);
+    groupWeights.set(g, rows);
+  }
+  const totalWeight = [...groupWeights.values()].reduce((a, b) => a + b, 0);
+
+  const gaps = Math.max(0, activeGroups.length - 1);
+  const totalH = height - pad * 2 - bandGap * gaps;
+  const layout = new Map();
+
+  let yOffset = pad;
+  activeGroups.forEach((group) => {
+    const weight = groupWeights.get(group);
+    const bandH = (totalH * weight) / totalWeight;
+
+    layout.set("band_" + group, { x: pad, y: yOffset, w: bandW, h: bandH, group: group, isBand: true });
+
+    const modules = groupModules.get(group);
+    const rows = Math.ceil(modules.length / maxPerRow);
+    const usableH = bandH - labelArea;
+    const rowH = usableH / rows;
+    const usableW = bandW - innerPad * 2;
+
+    modules.forEach((m, mi) => {
+      const row = Math.floor(mi / maxPerRow);
+      const col = mi % maxPerRow;
+      const rowCount = Math.min(modules.length - row * maxPerRow, maxPerRow);
+      const spacing = rowCount === 1 ? 0 : usableW / (rowCount - 1);
+
+      const cx = rowCount === 1
+        ? pad + bandW / 2
+        : pad + innerPad + spacing * col;
+      const cy = yOffset + labelArea + rowH * row + rowH / 2;
+      const scaleFactor = snapshot.modules.length < 5 ? 2.5
+        : snapshot.modules.length < 15 ? 1.6
+        : snapshot.modules.length < 30 ? 1.2
+        : 1.0;
+      const idealR = nodeRadius(m.loc) * scaleFactor;
+      const halfRow = rowH / 2;
+      const labelSpace = snapshot.modules.length < 30 ? 48 : 3;
+      const maxR = Math.max(15, halfRow - labelSpace);
+      const r = Math.min(idealR, maxR);
+      layout.set(m.id, { x: cx, y: cy, r, group, module: m });
+    });
+
+    yOffset += bandH + bandGap;
+  });
+
+  return layout;
+}
+
+function lightenColor(hex, amt) { return d3.color(hex).brighter(amt).formatHex(); }
+
+function initSVG() {
+  const container = document.getElementById("graph-container");
+  width = container.clientWidth;
+  height = container.clientHeight;
+
+  svg = d3.select(container).append("svg").attr("width", width).attr("height", height);
+
+  const defs = svg.append("defs");
+
+  // Glow filters
+  function addGlow(id, color, opacity, std) {
+    const f = defs.append("filter").attr("id", id).attr("x","-60%").attr("y","-60%").attr("width","220%").attr("height","220%");
+    f.append("feGaussianBlur").attr("stdDeviation", std).attr("result","blur");
+    f.append("feFlood").attr("flood-color", color).attr("flood-opacity", opacity);
+    f.append("feComposite").attr("in2","blur").attr("operator","in").attr("result","glow");
+    const m = f.append("feMerge"); m.append("feMergeNode").attr("in","glow"); m.append("feMergeNode").attr("in","SourceGraphic");
+  }
+  addGlow("glow-new", "#4eca68", 0.6, 14);
+  addGlow("glow-mod", "#5b9cf5", 0.5, 10);
+
+  // Arrow markers
+  function addArrow(id, color, op) {
+    defs.append("marker").attr("id", id)
+      .attr("viewBox","0 0 10 8").attr("refX",10).attr("refY",4)
+      .attr("markerWidth",7).attr("markerHeight",5.5).attr("orient","auto-start-reverse")
+      .append("path").attr("d","M 0 0 L 10 4 L 0 8 z").attr("fill",color).attr("opacity",op);
+  }
+  addArrow("arrow","#e8a44c",0.5);
+  addArrow("arrow-out","#e8a44c",0.85);
+  addArrow("arrow-in","#4cc9f0",0.85);
+
+  svg.append("rect").attr("width",width).attr("height",height).attr("fill","var(--bg-deep)");
+  zoomGroup = svg.append("g");
+  bandsLayer = zoomGroup.append("g");
+  edgesLayer = zoomGroup.append("g");
+  nodesLayer = zoomGroup.append("g");
+
+  const zoom = d3.zoom().scaleExtent([0.3, 4]).on("zoom", e => zoomGroup.attr("transform", e.transform));
+  svg.call(zoom);
+}
+
+function edgePath(layout, source, target) {
+  const s = layout.get(source);
+  const t = layout.get(target);
+  if (!s || !t) return "";
+
+  const dx = t.x - s.x, dy = t.y - s.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < 1) return "M "+s.x+","+s.y+" L "+t.x+","+t.y;
+
+  const sr = s.r + 2, tr = t.r + 10;
+  const x1 = s.x + (dx/dist)*sr, y1 = s.y + (dy/dist)*sr;
+  const x2 = t.x - (dx/dist)*tr, y2 = t.y - (dy/dist)*tr;
+
+  // Curvature: more for cross-group, less for same-group
+  const sameGroup = s.group === t.group;
+  const curv = sameGroup ? 0.3 : 0.15;
+  const mx = (x1+x2)/2 - dy * curv;
+  const my = (y1+y2)/2 + dx * curv;
+
+  return "M "+x1+","+y1+" Q "+mx+","+my+" "+x2+","+y2;
+}
+
+function renderSnapshot(index, animate) {
+  const snapshot = appData.snapshots[index];
+  const dur = animate ? 600 : 0;
+  const layout = computeLayout(snapshot);
+  layoutCache = layout;
+
+  const maxWeight = Math.max(1, ...snapshot.edges.map(e => e.weight));
+  const wThick = d3.scaleLog().domain([1, maxWeight]).range([0.7, 3.5]).clamp(true);
+  const wOpacity = d3.scaleLog().domain([1, maxWeight]).range([0.06, 0.38]).clamp(true);
+
+  // BANDS
+  const bandData = GROUP_ORDER.map(g => layout.has("band_"+g) ? { key: "band_"+g, ...layout.get("band_"+g) } : null).filter(Boolean);
+
+  const bandSel = bandsLayer.selectAll(".band-group").data(bandData, d => d.key);
+
+  const bandEnter = bandSel.enter().append("g").attr("class","band-group");
+  bandEnter.append("rect").attr("class","band-rect");
+  bandEnter.append("text").attr("class","band-label");
+  bandEnter.append("text").attr("class","band-desc");
+
+  const bands = bandEnter.merge(bandSel);
+  bands.select("rect")
+    .attr("x", d => d.x).attr("y", d => d.y).attr("width", d => d.w).attr("height", d => d.h)
+    .attr("fill", d => BAND_COLORS[d.group] || "#0f1218")
+    .attr("stroke", "#3a4260").attr("stroke-width", 2.5);
+
+  bands.select(".band-label")
+    .attr("x", d => d.x + 14).attr("y", d => d.y + 22)
+    .attr("dominant-baseline", "hanging")
+    .text(d => GROUP_LABELS[d.group]);
+
+  bands.select(".band-desc")
+    .attr("x", d => d.x + 14)
+    .attr("y", d => d.y + 60)
+    .attr("dominant-baseline", "hanging")
+    .text(d => GROUP_DESCS[d.group]);
+
+  bandSel.exit().remove();
+
+  // EDGES
+  const edgeData = snapshot.edges.filter(e => layout.has(e.source) && layout.has(e.target));
+  const edgeSel = edgesLayer.selectAll(".edge-path").data(edgeData, d => d.source+"->"+d.target);
+
+  edgeSel.exit().transition().duration(dur/2).attr("stroke-opacity",0).remove();
+
+  const edgeEnter = edgeSel.enter().append("path").attr("class","edge-path")
+    .attr("stroke","#e8a44c").attr("stroke-opacity",0).attr("marker-end", arrowsHidden ? "none" : "url(#arrow)");
+
+  const allEdges = edgeEnter.merge(edgeSel);
+  allEdges
+    .attr("d", d => edgePath(layout, d.source, d.target))
+    .attr("marker-end", arrowsHidden ? "none" : "url(#arrow)")
+    .transition().duration(dur).delay(dur * 0.3)
+    .attr("stroke-width", d => wThick(d.weight))
+    .attr("stroke-opacity", d => arrowsHidden ? 0 : wOpacity(d.weight));
+
+  // NODES
+  const nodeData = snapshot.modules.filter(m => layout.has(m.id)).map(m => ({ ...m, ...layout.get(m.id) }));
+  const nodeSel = nodesLayer.selectAll(".node-group").data(nodeData, d => d.id);
+
+  nodeSel.exit().transition().duration(dur/2).attr("opacity",0).remove();
+
+  const nodeEnter = nodeSel.enter().append("g").attr("class","node-group")
+    .attr("opacity", 0)
+    .attr("transform", d => "translate("+d.x+","+d.y+")")
+    .on("mouseenter", onNodeEnter).on("mouseleave", onNodeLeave).on("mousemove", onNodeMove);
+
+  nodeEnter.append("circle").attr("class","node-glow").attr("r", 0);
+  nodeEnter.append("circle").attr("class","node-body").attr("r", 0);
+  nodeEnter.append("text").attr("class","node-label");
+  nodeEnter.append("text").attr("class","node-sublabel");
+
+  const allNodes = nodeEnter.merge(nodeSel);
+
+  allNodes.transition().duration(dur)
+    .attr("opacity", 1)
+    .attr("transform", d => "translate("+d.x+","+d.y+")");
+
+  allNodes.select(".node-glow")
+    .transition().duration(dur)
+    .attr("r", d => d.r + 16)
+    .attr("fill", d => moduleColorMap.get(d.id))
+    .attr("opacity", d => d.status === "new" ? 0.8 : d.status === "modified" ? 0.6 : 0)
+    .attr("filter", d => d.status === "new" ? "url(#glow-new)" : d.status === "modified" ? "url(#glow-mod)" : "none");
+
+  allNodes.select(".node-body")
+    .transition().duration(dur)
+    .attr("r", d => d.r)
+    .attr("fill", d => moduleColorMap.get(d.id))
+    .attr("stroke", d => lightenColor(moduleColorMap.get(d.id), 0.6));
+
+  allNodes.select(".node-label")
+    .attr("y", d => d.r + 24)
+    .text(d => shortName(d.id));
+
+  allNodes.select(".node-sublabel")
+    .attr("y", d => d.r + 42)
+    .text(d => formatNum(d.loc) + " LOC");
+
+  // Store references
+  window._allNodes = allNodes;
+  window._allEdges = allEdges;
+  window._wThick = wThick;
+  window._wOpacity = wOpacity;
+  window._layout = layout;
+  window._snapshot = snapshot;
+
+  currentIndex = index;
+  updateUI(snapshot);
+}
+
+function updateUI(snapshot) {
+  document.getElementById("module-count").textContent = snapshot.totalModules + " module" + (snapshot.totalModules !== 1 ? "s" : "");
+  const narrative = SNAPSHOT_NARRATIVES[currentIndex];
+  document.getElementById("snapshot-label").textContent = "Commit #" + snapshot.commitNum;
+  document.getElementById("snapshot-date").textContent = formatDate(snapshot.date);
+  document.getElementById("slider").value = currentIndex;
+
+  if (narrative) {
+    document.getElementById("narrative-title").textContent = narrative.title;
+    const evoEl = document.getElementById("narrative-evolution");
+    evoEl.innerHTML = narrative.evolution ? narrative.evolution : "";
+    document.getElementById("narrative-desc").innerHTML = narrative.description;
+  }
+
+}
+
+// Hover
+function onNodeEnter(event, d) {
+  const connectedIds = new Set([d.id]);
+  const snapshot = window._snapshot;
+  const allEdges = window._allEdges;
+  const allNodes = window._allNodes;
+  const wThick = window._wThick;
+
+  allEdges
+    .attr("stroke-opacity", e => {
+      if (e.source === d.id || e.target === d.id) {
+        connectedIds.add(e.source); connectedIds.add(e.target);
+        return 0.8;
+      }
+      return arrowsHidden ? 0 : 0.015;
+    })
+    .attr("stroke", e => {
+      if (e.source === d.id) return "#e8a44c";
+      if (e.target === d.id) return "#4cc9f0";
+      return "#e8a44c";
+    })
+    .attr("stroke-width", e => {
+      if (e.source === d.id || e.target === d.id) return wThick(e.weight) + 1.2;
+      return wThick(e.weight);
+    })
+    .attr("marker-end", e => {
+      if (e.source === d.id) return "url(#arrow-out)";
+      if (e.target === d.id) return "url(#arrow-in)";
+      return "url(#arrow)";
+    });
+
+  allNodes.attr("opacity", n => connectedIds.has(n.id) ? 1 : 0.12);
+  showTooltip(event, d);
+}
+
+function onNodeLeave() {
+  const wOpacity = window._wOpacity;
+  const wThick = window._wThick;
+  window._allEdges
+    .attr("stroke","#e8a44c")
+    .attr("stroke-opacity", d => arrowsHidden ? 0 : wOpacity(d.weight))
+    .attr("stroke-width", d => wThick(d.weight))
+    .attr("marker-end", arrowsHidden ? "none" : "url(#arrow)");
+  window._allNodes.attr("opacity", 1);
+  hideTooltip();
+}
+
+function onNodeMove(event) { moveTooltip(event); }
+
+function showTooltip(event, d) {
+  const tooltip = document.getElementById("tooltip");
+  const color = moduleColorMap.get(d.id);
+  const snapshot = window._snapshot;
+  const outgoing = snapshot.edges.filter(e => e.source === d.id).sort((a,b) => b.weight - a.weight);
+  const incoming = snapshot.edges.filter(e => e.target === d.id).sort((a,b) => b.weight - a.weight);
+
+  let h = '<div class="tt-header">' +
+    '<div class="tt-dot" style="background:'+color+'"></div>' +
+    '<span class="tt-title">'+shortName(d.id)+'</span>' +
+    '<span class="tt-badge tt-badge-'+d.status+'">'+d.status+'</span></div>' +
+    '<div class="tt-path">'+d.id+' &middot; '+moduleGroup(d.id).toLowerCase()+'</div>' +
+    (MODULE_DESCS[d.id] ? '<div class="tt-desc">'+MODULE_DESCS[d.id]+'</div>' : '') +
+    '<div class="tt-divider"></div><div class="tt-grid">' +
+    '<span class="tt-label">Lines of code</span><span class="tt-value">'+d.loc.toLocaleString()+'</span>' +
+    '<span class="tt-label">Source files</span><span class="tt-value">'+(d.fileCount-d.testFileCount)+'</span>' +
+    '<span class="tt-label">Test files</span><span class="tt-value">'+d.testFileCount+'</span></div>';
+
+  if (outgoing.length > 0) {
+    h += '<div class="tt-divider"></div><div class="tt-section">Imports from ('+outgoing.length+')</div>';
+    outgoing.slice(0,5).forEach(e => {
+      h += '<div class="tt-edge-item"><span class="tt-edge-name">'+shortName(e.target)+'</span><span class="tt-edge-weight tt-edge-out">'+e.weight+'</span></div>';
+    });
+    if (outgoing.length > 5) h += '<div class="tt-edge-item"><span class="tt-edge-name" style="color:var(--text-tertiary)">+' + (outgoing.length-5) + ' more</span></div>';
+  }
+  if (incoming.length > 0) {
+    h += '<div class="tt-divider"></div><div class="tt-section">Imported by ('+incoming.length+')</div>';
+    incoming.slice(0,5).forEach(e => {
+      h += '<div class="tt-edge-item"><span class="tt-edge-name">'+shortName(e.source)+'</span><span class="tt-edge-weight tt-edge-in">'+e.weight+'</span></div>';
+    });
+    if (incoming.length > 5) h += '<div class="tt-edge-item"><span class="tt-edge-name" style="color:var(--text-tertiary)">+' + (incoming.length-5) + ' more</span></div>';
+  }
+
+  tooltip.innerHTML = h;
+  tooltip.style.display = "block";
+  moveTooltip(event);
+}
+
+function moveTooltip(event) {
+  const t = document.getElementById("tooltip");
+  const r = t.getBoundingClientRect();
+  let tx = event.clientX + 18, ty = event.clientY + 18;
+  if (tx + r.width > window.innerWidth - 12) tx = event.clientX - r.width - 18;
+  if (ty + r.height > window.innerHeight - 12) ty = event.clientY - r.height - 18;
+  t.style.left = tx+"px"; t.style.top = ty+"px";
+}
+
+function hideTooltip() { document.getElementById("tooltip").style.display = "none"; }
+
+async function init() {
+  const res = await fetch("./data.json");
+  appData = await res.json();
+  buildColorMap(appData.snapshots);
+  buildLocScale(appData.snapshots);
+  initSVG();
+
+  const slider = document.getElementById("slider");
+  slider.max = appData.snapshots.length - 1;
+
+  const ticks = document.getElementById("tick-labels");
+  const total = appData.snapshots.length;
+  appData.snapshots.forEach((s, i) => {
+    const sp = document.createElement("span");
+    const show = i === 0 || i === total - 1 || i % 4 === 0;
+    sp.textContent = show ? "#"+s.commitNum : "";
+    if (!show) sp.className = "tick-hidden";
+    ticks.appendChild(sp);
+  });
+
+  const toggleBtn = document.getElementById("toggle-arrows");
+  toggleBtn.addEventListener("click", () => {
+    arrowsHidden = !arrowsHidden;
+    toggleBtn.textContent = arrowsHidden ? "Show dependencies" : "Hide dependencies";
+    toggleBtn.classList.toggle("active", !arrowsHidden);
+    const wOpacity = window._wOpacity;
+    if (window._allEdges) {
+      window._allEdges
+        .attr("stroke-opacity", d => arrowsHidden ? 0 : wOpacity(d.weight))
+        .attr("marker-end", arrowsHidden ? "none" : "url(#arrow)");
+    }
+  });
+
+  slider.addEventListener("input", () => renderSnapshot(parseInt(slider.value), true));
+  document.getElementById("prev-btn").addEventListener("click", () => { if (currentIndex > 0) renderSnapshot(currentIndex-1, true); });
+  document.getElementById("next-btn").addEventListener("click", () => { if (currentIndex < appData.snapshots.length-1) renderSnapshot(currentIndex+1, true); });
+  window.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft" && currentIndex > 0) renderSnapshot(currentIndex-1, true);
+    if (e.key === "ArrowRight" && currentIndex < appData.snapshots.length-1) renderSnapshot(currentIndex+1, true);
+  });
+  window.addEventListener("resize", () => {
+    const c = document.getElementById("graph-container");
+    width = c.clientWidth; height = c.clientHeight;
+    svg.attr("width",width).attr("height",height);
+    svg.select("rect").attr("width",width).attr("height",height);
+    renderSnapshot(currentIndex, false);
+  });
+
+  renderSnapshot(0, false);
+}
+
+init();
+})();
+</script>
+</body>
+</html>
