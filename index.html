@@ -65,7 +65,7 @@
   .band-rect { rx: 10; ry: 10; }
   .band-label {
     font-family: var(--font-mono);
-    font-size: 36px;
+    font-size: 11px;
     font-weight: 600;
     fill: #d0d6e8;
     letter-spacing: 0.12em;
@@ -73,7 +73,7 @@
   }
   .band-desc {
     font-family: var(--font-display);
-    font-size: 27px;
+    font-size: 10.5px;
     font-weight: 400;
     fill: #b8c0d8;
     letter-spacing: 0;
@@ -82,26 +82,26 @@
   .node-glow { pointer-events: none; }
   .node-label {
     font-family: var(--font-display);
-    font-size: 24px;
+    font-size: 11px;
     font-weight: 700;
     fill: #ffffff;
     text-anchor: middle;
     pointer-events: none;
     paint-order: stroke;
     stroke: var(--bg-deep);
-    stroke-width: 6px;
+    stroke-width: 3px;
     stroke-linejoin: round;
   }
   .node-sublabel {
     font-family: var(--font-mono);
-    font-size: 18px;
+    font-size: 9px;
     font-weight: 500;
     fill: #eef0f8;
     text-anchor: middle;
     pointer-events: none;
     paint-order: stroke;
     stroke: var(--bg-deep);
-    stroke-width: 5px;
+    stroke-width: 2.5px;
     stroke-linejoin: round;
   }
   .edge-path { fill: none; pointer-events: none; }
@@ -495,7 +495,7 @@ function buildColorMap(snapshots) {
 function buildLocScale(snapshots) {
   let minL = Infinity, maxL = 0;
   for (const s of snapshots) for (const m of s.modules) { minL = Math.min(minL, m.loc); maxL = Math.max(maxL, m.loc); }
-  locScale = d3.scaleSqrt().domain([minL, maxL]).range([30, 90]).clamp(true);
+  locScale = d3.scaleSqrt().domain([minL, maxL]).range([10, 36]).clamp(true);
 }
 
 function nodeRadius(loc) { return locScale(loc); }
@@ -506,9 +506,8 @@ function formatDate(s) { return new Date(s+"T00:00:00").toLocaleDateString("en-U
 function computeLayout(snapshot) {
   const pad = 24;
   const bandGap = 10;
-  const labelArea = 85;
-  const bandW = width - pad * 2;
-  const innerPad = 50;
+  const labelArea = 32;
+  const innerPad = 30;
 
   const activeGroups = GROUP_ORDER.filter(g =>
     snapshot.modules.some(m => moduleGroup(m.id) === g)
@@ -521,7 +520,11 @@ function computeLayout(snapshot) {
       .sort((a, b) => b.loc - a.loc));
   }
 
-  const maxPerRow = Math.floor((bandW - innerPad * 2) / 140);
+  const totalModuleCount = snapshot.modules.length;
+  const bandW = width - pad * 2;
+  const contentOffsetX = 0;
+
+  const maxPerRow = Math.max(1, Math.floor((bandW - innerPad * 2) / 140));
 
   const groupWeights = new Map();
   for (const g of activeGroups) {
@@ -533,15 +536,15 @@ function computeLayout(snapshot) {
 
   const gaps = Math.max(0, activeGroups.length - 1);
   const totalH = height - pad * 2 - bandGap * gaps;
+  const maxBandH = totalModuleCount < 10 ? 160 : 300;
   const layout = new Map();
 
-  const maxBandH = 300;
   let yOffset = pad;
   activeGroups.forEach((group) => {
     const weight = groupWeights.get(group);
     const bandH = Math.min((totalH * weight) / totalWeight, maxBandH);
 
-    layout.set("band_" + group, { x: pad, y: yOffset, w: bandW, h: bandH, group: group, isBand: true });
+    layout.set("band_" + group, { x: contentOffsetX + pad, y: yOffset, w: bandW, h: bandH, group: group, isBand: true });
 
     const modules = groupModules.get(group);
     const rows = Math.ceil(modules.length / maxPerRow);
@@ -556,18 +559,10 @@ function computeLayout(snapshot) {
       const spacing = rowCount === 1 ? 0 : usableW / (rowCount - 1);
 
       const cx = rowCount === 1
-        ? pad + bandW / 2
-        : pad + innerPad + spacing * col;
+        ? contentOffsetX + pad + bandW / 2
+        : contentOffsetX + pad + innerPad + spacing * col;
       const cy = yOffset + labelArea + rowH * row + rowH / 2;
-      const scaleFactor = snapshot.modules.length < 5 ? 1.4
-        : snapshot.modules.length < 15 ? 1.2
-        : snapshot.modules.length < 30 ? 1.1
-        : 1.0;
-      const idealR = nodeRadius(m.loc) * scaleFactor;
-      const halfRow = rowH / 2;
-      const labelSpace = snapshot.modules.length < 30 ? 48 : 3;
-      const maxR = Math.max(15, halfRow - labelSpace);
-      const r = Math.min(idealR, maxR);
+      const r = nodeRadius(m.loc);
       layout.set(m.id, { x: cx, y: cy, r, group, module: m });
     });
 
@@ -666,16 +661,16 @@ function renderSnapshot(index, animate) {
   bands.select("rect")
     .attr("x", d => d.x).attr("y", d => d.y).attr("width", d => d.w).attr("height", d => d.h)
     .attr("fill", d => BAND_COLORS[d.group] || "#0f1218")
-    .attr("stroke", "#3a4260").attr("stroke-width", 2.5);
+    .attr("stroke", "#3a4260").attr("stroke-width", 1);
 
   bands.select(".band-label")
-    .attr("x", d => d.x + 14).attr("y", d => d.y + 22)
+    .attr("x", d => d.x + 12).attr("y", d => d.y + 8)
     .attr("dominant-baseline", "hanging")
     .text(d => GROUP_LABELS[d.group]);
 
   bands.select(".band-desc")
-    .attr("x", d => d.x + 14)
-    .attr("y", d => d.y + 60)
+    .attr("x", d => d.x + 12)
+    .attr("y", d => d.y + 20)
     .attr("dominant-baseline", "hanging")
     .text(d => GROUP_DESCS[d.group]);
 
@@ -722,7 +717,7 @@ function renderSnapshot(index, animate) {
 
   allNodes.select(".node-glow")
     .transition().duration(dur)
-    .attr("r", d => d.r + 16)
+    .attr("r", d => d.r + 6)
     .attr("fill", d => moduleColorMap.get(d.id))
     .attr("opacity", d => d.status === "new" ? 0.8 : d.status === "modified" ? 0.6 : 0)
     .attr("filter", d => d.status === "new" ? "url(#glow-new)" : d.status === "modified" ? "url(#glow-mod)" : "none");
@@ -734,11 +729,11 @@ function renderSnapshot(index, animate) {
     .attr("stroke", d => lightenColor(moduleColorMap.get(d.id), 0.6));
 
   allNodes.select(".node-label")
-    .attr("y", d => d.r + 24)
+    .attr("y", d => d.r + 14)
     .text(d => shortName(d.id));
 
   allNodes.select(".node-sublabel")
-    .attr("y", d => d.r + 42)
+    .attr("y", d => d.r + 25)
     .text(d => formatNum(d.loc) + " LOC");
 
   // Store references

@@ -4,6 +4,8 @@ Interactive visualization of how the [OpenClaw](https://github.com/openclaw/open
 
 [Watch the video walkthrough](https://youtu.be/iPunXq5MMv4)
 
+![preview](preview.png)
+
 ## Usage
 
 ```
