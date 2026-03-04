@@ -12,7 +12,6 @@ cd openclaw-architecture-analysis
 open index.html
 ```
 
-No build steps. No dependencies. Just open the file.
 
 ## What's inside
 
