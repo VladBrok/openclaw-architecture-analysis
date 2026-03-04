@@ -9,8 +9,10 @@ Interactive visualization of how the [OpenClaw](https://github.com/openclaw/open
 ```
 git clone https://github.com/VladBrok/openclaw-architecture-analysis.git
 cd openclaw-architecture-analysis
-open index.html
+npx serve .
 ```
+
+Then open http://localhost:3000 in your browser.
 
 
 ## What's inside

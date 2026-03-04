@@ -535,10 +535,11 @@ function computeLayout(snapshot) {
   const totalH = height - pad * 2 - bandGap * gaps;
   const layout = new Map();
 
+  const maxBandH = 300;
   let yOffset = pad;
   activeGroups.forEach((group) => {
     const weight = groupWeights.get(group);
-    const bandH = (totalH * weight) / totalWeight;
+    const bandH = Math.min((totalH * weight) / totalWeight, maxBandH);
 
     layout.set("band_" + group, { x: pad, y: yOffset, w: bandW, h: bandH, group: group, isBand: true });
 
@@ -558,9 +559,9 @@ function computeLayout(snapshot) {
         ? pad + bandW / 2
         : pad + innerPad + spacing * col;
       const cy = yOffset + labelArea + rowH * row + rowH / 2;
-      const scaleFactor = snapshot.modules.length < 5 ? 2.5
-        : snapshot.modules.length < 15 ? 1.6
-        : snapshot.modules.length < 30 ? 1.2
+      const scaleFactor = snapshot.modules.length < 5 ? 1.4
+        : snapshot.modules.length < 15 ? 1.2
+        : snapshot.modules.length < 30 ? 1.1
         : 1.0;
       const idealR = nodeRadius(m.loc) * scaleFactor;
       const halfRow = rowH / 2;
