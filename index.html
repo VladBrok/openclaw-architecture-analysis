@@ -205,7 +205,7 @@
     <h1>OpenClaw Architecture Evolution</h1>
     <span id="module-count">-</span>
   </div>
-  <button id="toggle-arrows">Show dependencies</button>
+  <button id="toggle-arrows" class="active">Hide dependencies</button>
 </div>
 
 <div id="top-panel">
@@ -477,7 +477,7 @@ let moduleColorMap = new Map();
 let locScale;
 let layoutCache = new Map();
 let width, height;
-let arrowsHidden = true;
+let arrowsHidden = false;
 
 function moduleGroup(id) {
   for (const [g, members] of Object.entries(GROUP_MEMBERS)) {

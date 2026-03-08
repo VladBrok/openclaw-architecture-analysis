@@ -2,9 +2,9 @@
 
 Interactive visualization of how the [OpenClaw](https://github.com/openclaw/openclaw) codebase went from one file to 91 modules across 15,000+ commits.
 
-[Watch the video walkthrough](https://youtu.be/iPunXq5MMv4)
+[Live demo](https://openclaw-architecture-analysis-gshtgghug-vladbroks-projects.vercel.app/) | [Watch the video walkthrough](https://youtu.be/iPunXq5MMv4)
 
-![preview](preview.png)
+![demo](demo.gif)
 
 ## Usage
 
