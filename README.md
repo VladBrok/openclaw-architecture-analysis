@@ -4,7 +4,7 @@ Interactive visualization of how the [OpenClaw](https://github.com/openclaw/open
 
 [Live demo](https://openclaw-architecture-analysis-gshtgghug-vladbroks-projects.vercel.app/) | [Watch the video walkthrough](https://youtu.be/iPunXq5MMv4)
 
-<video src="https://github.com/VladBrok/openclaw-architecture-analysis/raw/main/demo.mp4" autoplay loop muted playsinline></video>
+![demo](demo.gif)
 
 ## Usage
 
